@@ -41,7 +41,10 @@ namespace NinjaTrader.NinjaScript.Indicators
 		{
 		    public string ticker;
 		    public double percent;
+			public double price;
 		}
+		
+		
 		
 		List<PostionData> Portfolio = new List<PostionData>();
 		List<PostionData> DesiredPortfolio = new List<PostionData>();
@@ -107,7 +110,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 		
 		protected override void OnBarUpdate()
 		{
-			int Service = 1; // 0 aggressive, 1 income
+			int Service = 0; // 0 aggressive, 1 income
 		
 			if ( Count - 2 == CurrentBar) {
 				ChoosePortfilio(service: Service);
@@ -144,15 +147,19 @@ namespace NinjaTrader.NinjaScript.Indicators
 				string TickerName = (position.Instrument.FullName);
 				double Quantities = position.Quantity;
 				double PositionPrice = position.AveragePrice;
+				double CurrentPrice = position.GetMarketPrice();
+				
 				double InitialAllocation = Quantities * PositionPrice;
 				double PercentOfInitial =  (InitialAllocation / InitialInvestment) * 100;
 				cashValuestring 		= cashValue.ToString("N2");
 				PostionData positionData;
 				positionData.ticker = TickerName;
 				positionData.percent = PercentOfInitial;
+				positionData.price = CurrentPrice;
 				Portfolio.Add(positionData);
 				allPositions += OpenPnL;
 				totalPercent += PercentOfInitial;
+				//Print(TickerName + " " + Quantities + " Shares " + Quantities + " Cash " + InitialAllocation );
 			}
 			Print("Cash: " + cashValuestring + " Account Value: $" + allPositions.ToString("N0") + " \ttotal percent: " + totalPercent.ToString("N0") + "%");
 			ShowPositions(positions: Portfolio, name: "Current Positions");
@@ -180,9 +187,25 @@ namespace NinjaTrader.NinjaScript.Indicators
 		        }
 		        if (!result)
 		        { 
+					// assign cash value for % of portfolio
+					ConvertPctToShares(position: product2);
 					MissingTickers.Add(product2);
 		        }
 		    } 
+		}
+		
+		private void ConvertPctToShares(PostionData position) {
+			
+			double PositionPercent = position.percent * 0.01;
+			double InitialInvestAmt = InitialInvestment * PositionPercent;
+			double NumShares =  InitialInvestAmt / position.price;
+			
+			Print("\nNew position to enter on " + position.ticker + 
+			" \tBuy " + NumShares.ToString("N1") + " shares at $" + position.price.ToString("N2") + " for a total of $" + InitialInvestAmt.ToString("N0"));
+			Print("Convert % to shares: " + " " + position.percent + 
+			"% is an Initial Investment of $" + InitialInvestAmt.ToString("N0") +   " = $" + InitialInvestment +" * "+ PositionPercent.ToString("N3") + 
+			" Number of Shares: " + NumShares.ToString("N1") +" = $"
+				+  InitialInvestAmt.ToString("N0") +" / "+ position.price);
 		}
 		
 		private void  DoesPercentageMatch() {
@@ -198,21 +221,81 @@ namespace NinjaTrader.NinjaScript.Indicators
 						 if (correct.percent == portfolio.percent) {
 							// Print(correct.percent + " matched " +  portfolio.percent);
 						 } else {
-							 Print("desired % on " + correct.ticker  + " is \t" + correct.percent + "\t != portfolio % of \t " +  portfolio.percent.ToString("N1"));
+							 
+							 // difference to target percent
+							 double diffToTargetPct = correct.percent  - portfolio.percent;
+							 
+							 // $ to target percent, pct * postfolio value
+							 double cashDiffToTarget = InitialInvestment * ( diffToTargetPct * .01);
+							 
+							 // num shared to target pct
+							 double NumSharesNeeded = cashDiffToTarget / portfolio.price;
+							 Print("desired % on " + correct.ticker  + " is \t" + correct.percent + "\t != portfolio % of \t " +  portfolio.percent.ToString("N1") + " " +
+							 "  Diff to target percent is " + diffToTargetPct.ToString("N1") + "%" + " $" + cashDiffToTarget.ToString("N0") + " " + 
+							 " Shareds needed to trade " + NumSharesNeeded.ToString("N0")
+							 );
 						 }
 		            
 					}
 				}
 			}
 		}
-
+		
+		private double ReturnPriceFor(string ticker) {
+			double answer = 0.0;
+			switch (ticker) {
+				case "SVOL":
+					answer = 22.07;
+					break;
+				case "GOF":
+					answer = 16.31;
+					break;
+				case "AWP":
+					answer = 4.36;
+					break;
+				case "YYY":
+					answer = 12.39;
+					break;
+				case "JEPI":
+					answer = 56.19;
+					break;
+				case "BGY":
+					answer = 5.26;
+					break;
+				case "MVRL":
+					answer = 23.49;
+					break;
+				case "BSTZ":
+					answer = 17.76;
+					break;
+				case "CEFD":
+					answer = 21.52;
+					break;
+				case "BDCX":
+					answer = 23.49;
+					break;
+				case "SLVO":
+					answer = 87.45;
+					break;
+				case "USOI":
+					answer = 84.98;
+					break;
+				default:
+					answer = 0.0;
+					break;	
+			}
+			return answer;
+		}
+		
 		private void DesiredPortfolioList(string[] Ticker, int[] Percents) {
+			ReturnPriceFor( ticker: "SVOL") ;
 			PostionData positionData;
 			int count = 0;
 			foreach (string t in Ticker)
 			{
 				positionData.ticker = t;
 				positionData.percent = Percents[count];
+				positionData.price = ReturnPriceFor( ticker: t);
 				DesiredPortfolio.Add(positionData);
 				count += 1;
 			}
@@ -224,7 +307,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 			Print("\n" + positions.Count + "  " + name );
 			foreach (PostionData pos in positions)
 			{
-				Print(pos.ticker + ": " + pos.percent.ToString("N1") + "%");
+				Print(pos.ticker + ": " + pos.percent.ToString("N1") + "%" + " close: " + pos.price.ToString("N2"));
 			}
 		}
 				
